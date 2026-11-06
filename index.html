@@ -1,1 +1,1230 @@
-doubleelimination
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ダブルエリミネーション トーナメントマネージャー</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Phosphor Icons for modern icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+    body {
+      font-family: 'Inter', 'Noto Sans JP', sans-serif;
+    }
+    /* Custom scrollbars for bracket canvas */
+    .bracket-scroll::-webkit-scrollbar {
+      height: 8px;
+      width: 8px;
+    }
+    .bracket-scroll::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    .bracket-scroll::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    .bracket-scroll::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+
+  <!-- Header -->
+  <header class="bg-slate-900/90 border-b border-slate-800 sticky top-0 z-40 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <i class="ph ph-trophy text-2xl text-white"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+            Double Elimination Manager
+            <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">v1.0</span>
+          </h1>
+          <p class="text-xs text-slate-400" id="headerSubText">トーナメント未開始</p>
+        </div>
+      </div>
+
+      <!-- Action Nav Buttons -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <button id="btnNavBracket" onclick="switchView('bracket')" class="px-3.5 py-1.5 rounded-lg text-sm font-medium transition bg-indigo-600 text-white flex items-center gap-1.5 shadow-sm">
+          <i class="ph ph-tree-structure"></i> ブラケット
+        </button>
+        <button id="btnNavStandings" onclick="switchView('standings')" class="px-3.5 py-1.5 rounded-lg text-sm font-medium transition bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-1.5">
+          <i class="ph ph-ranking"></i> 順位表
+        </button>
+        <button id="btnNavSetup" onclick="switchView('setup')" class="px-3.5 py-1.5 rounded-lg text-sm font-medium transition bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-1.5">
+          <i class="ph ph-gear"></i> 大会設定
+        </button>
+        
+        <div class="h-5 w-px bg-slate-800 mx-1"></div>
+
+        <!-- Export/Import Actions -->
+        <button onclick="exportData()" title="JSON出力" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition">
+          <i class="ph ph-download-simple text-lg"></i>
+        </button>
+        <label for="importFile" title="JSONインポート" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer">
+          <i class="ph ph-upload-simple text-lg"></i>
+          <input type="file" id="importFile" accept=".json" class="hidden" onchange="importData(event)">
+        </label>
+        <button onclick="shareState()" title="共有コードコピー" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition">
+          <i class="ph ph-share-network text-lg"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Notification Banner -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+    <div class="bg-slate-800 border border-slate-700 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3">
+      <i id="toastIcon" class="ph ph-info text-xl text-indigo-400"></i>
+      <span id="toastMsg" class="text-sm font-medium">通知メッセージ</span>
+    </div>
+  </div>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6">
+
+    <!-- VIEW: SETUP -->
+    <section id="viewSetup" class="max-w-3xl mx-auto space-y-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+            <i class="ph ph-users-three text-2xl"></i>
+          </div>
+          <div>
+            <h2 class="text-xl font-bold text-white">大会・参加者セットアップ</h2>
+            <p class="text-sm text-slate-400">参加者を入力してダブルエリミネーショントーナメント表を生成します</p>
+          </div>
+        </div>
+
+        <div class="space-y-5">
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1.5">大会名</label>
+            <input type="text" id="tournamentName" value="Summer Championship 2026" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 focus:outline-none focus:border-indigo-500 text-sm">
+          </div>
+
+          <div>
+            <div class="flex justify-between items-center mb-1.5">
+              <label class="text-sm font-medium text-slate-300">参加者リスト (1行に1名 / シード順)</label>
+              <span id="playerCountLabel" class="text-xs text-indigo-400 font-semibold bg-indigo-950/60 border border-indigo-800/60 px-2 py-0.5 rounded-md">4 名</span>
+            </div>
+            <textarea id="playerInput" rows="9" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-slate-100 text-sm font-mono focus:outline-none focus:border-indigo-500 leading-relaxed" placeholder="プレイヤー1&#10;プレイヤー2&#10;プレイヤー3&#10;プレイヤー4"></textarea>
+          </div>
+
+          <!-- Quick Presets -->
+          <div class="flex flex-wrap items-center gap-2 pt-1">
+            <span class="text-xs text-slate-400 mr-1">プリセット:</span>
+            <button onclick="loadPreset(4)" class="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">4名</button>
+            <button onclick="loadPreset(8)" class="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">8名</button>
+            <button onclick="loadPreset(16)" class="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">16名</button>
+            <div class="h-4 w-px bg-slate-800 mx-1"></div>
+            <button onclick="shufflePlayers()" class="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center gap-1">
+              <i class="ph ph-shuffle"></i> シャッフル
+            </button>
+            <button onclick="clearPlayers()" class="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-red-950 text-red-400 transition flex items-center gap-1">
+              <i class="ph ph-trash"></i> クリア
+            </button>
+          </div>
+
+          <div class="pt-4 border-t border-slate-800 flex flex-col sm:flex-row gap-3">
+            <button onclick="startTournament()" class="flex-1 py-3 px-5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold text-sm shadow-lg shadow-indigo-600/25 transition flex items-center justify-center gap-2">
+              <i class="ph ph-play-fill"></i> トーナメントを生成・開始
+            </button>
+            <button onclick="resetTournamentConfirm()" class="py-3 px-4 rounded-xl bg-slate-800 hover:bg-red-900/40 text-slate-400 hover:text-red-400 border border-slate-700/60 text-sm font-medium transition flex items-center justify-center gap-1.5">
+              <i class="ph ph-arrows-counter-clockwise"></i> 全リセット
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW: BRACKET -->
+    <section id="viewBracket" class="hidden space-y-8">
+      
+      <!-- Tournament Progress Bar & Controls -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+          <div>
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 block">トーナメント進捗</span>
+            <span id="progressPercent" class="text-lg font-bold text-indigo-400">0%</span>
+          </div>
+          <div class="w-36 sm:w-56 h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+            <div id="progressBar" class="bg-gradient-to-r from-indigo-500 to-violet-500 h-full w-0 transition-all duration-300"></div>
+          </div>
+        </div>
+        
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 text-xs text-slate-400">
+            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> 完了</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> 進行可能</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-slate-700"></span> 待機中</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- WINNERS BRACKET -->
+      <div class="space-y-4">
+        <div class="flex items-center gap-2 border-b border-indigo-500/30 pb-2">
+          <span class="p-1 rounded-md bg-indigo-500/20 text-indigo-400"><i class="ph ph-crown-simple text-lg"></i></span>
+          <h2 class="text-lg font-bold text-white tracking-wide uppercase">Winners Bracket (勝者側)</h2>
+          <span class="text-xs text-slate-400 ml-2">敗者はルーザーズブラケットへ降格します</span>
+        </div>
+        <div class="bracket-scroll overflow-x-auto pb-4">
+          <div id="winnersBracketContainer" class="flex gap-8 items-start min-w-max p-2">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+
+      <!-- LOSERS BRACKET -->
+      <div class="space-y-4 pt-6">
+        <div class="flex items-center gap-2 border-b border-rose-500/30 pb-2">
+          <span class="p-1 rounded-md bg-rose-500/20 text-rose-400"><i class="ph ph-shield-warning text-lg"></i></span>
+          <h2 class="text-lg font-bold text-white tracking-wide uppercase">Losers Bracket (敗者側)</h2>
+          <span class="text-xs text-slate-400 ml-2">ここで敗退すると大会脱落となります</span>
+        </div>
+        <div class="bracket-scroll overflow-x-auto pb-4">
+          <div id="losersBracketContainer" class="flex gap-8 items-start min-w-max p-2">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+
+      <!-- GRAND FINALS -->
+      <div class="space-y-4 pt-6">
+        <div class="flex items-center gap-2 border-b border-amber-500/30 pb-2">
+          <span class="p-1 rounded-md bg-amber-500/20 text-amber-400"><i class="ph ph-trophy text-lg"></i></span>
+          <h2 class="text-lg font-bold text-white tracking-wide uppercase">Grand Finals (決勝戦)</h2>
+          <span class="text-xs text-slate-400 ml-2">勝者側1位 vs 敗者側1位。敗者側が1勝するとリセットマッチが発生します</span>
+        </div>
+        <div class="bracket-scroll overflow-x-auto pb-4">
+          <div id="grandFinalsContainer" class="flex gap-8 items-start min-w-max p-2">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW: STANDINGS -->
+    <section id="viewStandings" class="hidden max-w-4xl mx-auto space-y-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl">
+        <div class="flex items-center justify-between mb-6">
+          <div class="flex items-center gap-3">
+            <div class="p-2.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <i class="ph ph-medal text-2xl"></i>
+            </div>
+            <div>
+              <h2 class="text-xl font-bold text-white">大会結果・最終順位</h2>
+              <p class="text-sm text-slate-400">試合の勝敗結果に基づいて自動更新されます</p>
+            </div>
+          </div>
+          <button onclick="printStandings()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 border border-slate-700">
+            <i class="ph ph-printer"></i> 印刷 / PDF保存
+          </button>
+        </div>
+
+        <div class="overflow-hidden border border-slate-800 rounded-xl">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-950 text-slate-400 uppercase text-xs tracking-wider border-b border-slate-800">
+              <tr>
+                <th class="py-3 px-4 w-20 text-center">順位</th>
+                <th class="py-3 px-4">参加者</th>
+                <th class="py-3 px-4 text-center">ステータス</th>
+                <th class="py-3 px-4 text-right">敗退ラウンド</th>
+              </tr>
+            </thead>
+            <tbody id="standingsTableBody" class="divide-y divide-slate-800 text-slate-200">
+              <!-- Populated via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MATCH DETAIL / SCORE MODAL -->
+  <div id="matchModal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-6 transform transition-all">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div>
+          <span id="modalMatchBadge" class="text-xs px-2 py-0.5 rounded font-mono font-medium bg-slate-800 text-slate-300 border border-slate-700">Match 1</span>
+          <h3 id="modalMatchTitle" class="text-base font-bold text-white mt-1">Winners Round 1</h3>
+        </div>
+        <button onclick="closeMatchModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800">
+          <i class="ph ph-x text-xl"></i>
+        </button>
+      </div>
+
+      <div class="space-y-4">
+        <!-- Player 1 Box -->
+        <div id="p1Box" class="p-4 rounded-xl border border-slate-800 bg-slate-950 flex items-center justify-between transition hover:border-slate-700">
+          <div class="flex-1 mr-3">
+            <span class="text-xs text-slate-500 uppercase tracking-wider block">Participant 1</span>
+            <div id="modalP1Name" class="font-bold text-base text-slate-100 truncate">P1</div>
+          </div>
+          <div class="flex items-center gap-3">
+            <input type="number" id="modalP1Score" min="0" max="99" value="0" class="w-16 bg-slate-900 border border-slate-700 rounded-lg py-1.5 text-center text-lg font-bold text-white focus:outline-none focus:border-indigo-500">
+            <button onclick="selectWinnerDirect(1)" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1 shadow">
+              <i class="ph ph-check-bold"></i> 勝利
+            </button>
+          </div>
+        </div>
+
+        <div class="text-center font-bold text-xs text-slate-500 uppercase tracking-widest">— VS —</div>
+
+        <!-- Player 2 Box -->
+        <div id="p2Box" class="p-4 rounded-xl border border-slate-800 bg-slate-950 flex items-center justify-between transition hover:border-slate-700">
+          <div class="flex-1 mr-3">
+            <span class="text-xs text-slate-500 uppercase tracking-wider block">Participant 2</span>
+            <div id="modalP2Name" class="font-bold text-base text-slate-100 truncate">P2</div>
+          </div>
+          <div class="flex items-center gap-3">
+            <input type="number" id="modalP2Score" min="0" max="99" value="0" class="w-16 bg-slate-900 border border-slate-700 rounded-lg py-1.5 text-center text-lg font-bold text-white focus:outline-none focus:border-indigo-500">
+            <button onclick="selectWinnerDirect(2)" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1 shadow">
+              <i class="ph ph-check-bold"></i> 勝利
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+        <button onclick="resetMatchState()" class="px-3 py-2 text-xs text-rose-400 hover:bg-rose-950/40 border border-rose-900/40 rounded-lg transition">
+          試合結果をリセット
+        </button>
+        <div class="flex gap-2">
+          <button onclick="closeMatchModal()" class="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition">
+            キャンセル
+          </button>
+          <button onclick="saveModalScores()" class="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition shadow">
+            スコアを保存して終了
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="border-t border-slate-900 py-4 text-center text-xs text-slate-400">
+    Double Elimination Tournament Engine &copy; 2026. Designed for GitHub Pages single-file hosting.
+  </footer>
+
+  <!-- TOURNAMENT ENGINE SCRIPT -->
+  <script>
+    // Storage Key
+    const STORAGE_KEY = "DOUBLE_ELIM_DATA_V1";
+
+    // Application State
+    let appState = {
+      name: "Championship 2026",
+      participants: ["Player 1", "Player 2", "Player 3", "Player 4"],
+      matches: {}, // matchId -> Match Object
+      bracketStructure: null, // metadata about rounds
+      isStarted: false
+    };
+
+    let activeModalMatchId = null;
+
+    // --- PRESETS ---
+    const PRESETS = {
+      4: ["Alpha", "Bravo", "Charlie", "Delta"],
+      8: ["Apex", "Blaze", "Comet", "Drift", "Echo", "Frost", "Ghost", "Hydra"],
+      16: [
+        "Ace", "Blade", "Cipher", "Dynamo", "Eclipse", "Falcon", "Goliath", "Hazard",
+        "Inferno", "Joker", "Krypton", "Lightning", "Mirage", "Nova", "Omega", "Phantom"
+      ]
+    };
+
+    // Initialize
+    window.addEventListener("DOMContentLoaded", () => {
+      loadFromStorage();
+      updatePlayerCount();
+      
+      document.getElementById("playerInput").addEventListener("input", updatePlayerCount);
+      
+      if (appState.isStarted) {
+        switchView("bracket");
+      } else {
+        switchView("setup");
+      }
+      render();
+    });
+
+    function updatePlayerCount() {
+      const text = document.getElementById("playerInput").value.trim();
+      const count = text ? text.split("\n").filter(l => l.trim() !== "").length : 0;
+      document.getElementById("playerCountLabel").textContent = `${count} 名`;
+    }
+
+    function loadPreset(n) {
+      if (PRESETS[n]) {
+        document.getElementById("playerInput").value = PRESETS[n].join("\n");
+        updatePlayerCount();
+        showToast(`${n}名のプリセットを読み込みました`);
+      }
+    }
+
+    function shufflePlayers() {
+      const text = document.getElementById("playerInput").value.trim();
+      if (!text) return;
+      const arr = text.split("\n").filter(l => l.trim() !== "");
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      document.getElementById("playerInput").value = arr.join("\n");
+      showToast("参加者リストをシャッフルしました");
+    }
+
+    function clearPlayers() {
+      document.getElementById("playerInput").value = "";
+      updatePlayerCount();
+    }
+
+    // --- NAVIGATION ---
+    function switchView(view) {
+      document.getElementById("viewSetup").classList.add("hidden");
+      document.getElementById("viewBracket").classList.add("hidden");
+      document.getElementById("viewStandings").classList.add("hidden");
+
+      document.getElementById("btnNavSetup").className = "px-3.5 py-1.5 rounded-lg text-sm font-medium transition bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-1.5";
+      document.getElementById("btnNavBracket").className = "px-3.5 py-1.5 rounded-lg text-sm font-medium transition bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-1.5";
+      document.getElementById("btnNavStandings").className = "px-3.5 py-1.5 rounded-lg text-sm font-medium transition bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-1.5";
+
+      if (view === "setup") {
+        document.getElementById("viewSetup").classList.remove("hidden");
+        document.getElementById("btnNavSetup").className = "px-3.5 py-1.5 rounded-lg text-sm font-medium transition bg-indigo-600 text-white flex items-center gap-1.5 shadow-sm";
+      } else if (view === "bracket") {
+        document.getElementById("viewBracket").classList.remove("hidden");
+        document.getElementById("btnNavBracket").className = "px-3.5 py-1.5 rounded-lg text-sm font-medium transition bg-indigo-600 text-white flex items-center gap-1.5 shadow-sm";
+      } else if (view === "standings") {
+        document.getElementById("viewStandings").classList.remove("hidden");
+        document.getElementById("btnNavStandings").className = "px-3.5 py-1.5 rounded-lg text-sm font-medium transition bg-indigo-600 text-white flex items-center gap-1.5 shadow-sm";
+        renderStandings();
+      }
+    }
+
+    // --- TOURNAMENT CREATION ENGINE ---
+    function startTournament() {
+      const rawName = document.getElementById("tournamentName").value.trim();
+      const pText = document.getElementById("playerInput").value.trim();
+      let players = pText.split("\n").map(p => p.trim()).filter(p => p.length > 0);
+
+      if (players.length < 3) {
+        showToast("参加者は最低3名以上必要です (推奨: 4, 8, 16名)", true);
+        return;
+      }
+
+      // Pad to power of 2 (4, 8, 16, 32...) with BYE if needed
+      let power = 4;
+      while (power < players.length && power < 32) {
+        power *= 2;
+      }
+      if (players.length > 32) {
+        showToast("現在の最大対応人数は32名です", true);
+        return;
+      }
+
+      // Fill with BYEs if not exact power of 2
+      const fullPlayers = [...players];
+      while (fullPlayers.length < power) {
+        fullPlayers.push("BYE");
+      }
+
+      appState.name = rawName || "Championship";
+      appState.participants = fullPlayers;
+      appState.isStarted = true;
+      appState.matches = {};
+
+      generateDoubleEliminationStructure(fullPlayers.length);
+
+      // Populate Round 1 with Seeded pairs
+      seedWinnersRound1(fullPlayers);
+
+      // Auto resolve BYEs in initial round
+      autoAdvanceByes();
+
+      saveToStorage();
+      render();
+      switchView("bracket");
+      showToast("トーナメント表を新しく作成しました！");
+    }
+
+    /**
+     * Standard seed layout for N players
+     */
+    function getStandardSeedOrder(num) {
+      let rounds = Math.log2(num) - 1;
+      let order = [1, 2];
+      for (let i = 0; i < rounds; i++) {
+        let next = [];
+        let length = order.length * 2 + 1;
+        for (let d of order) {
+          next.push(d);
+          next.push(length - d);
+        }
+        order = next;
+      }
+      return order; // 1-indexed
+    }
+
+    /**
+     * Generates all bracket match nodes and linking rules
+     */
+    function generateDoubleEliminationStructure(numPlayers) {
+      const matches = {};
+      const wbRoundsCount = Math.log2(numPlayers); // e.g., 8 -> 3 (Quarter, Semi, Final)
+      const lbRoundsCount = (wbRoundsCount - 1) * 2; // e.g., 8 -> 4 rounds
+
+      appState.bracketStructure = {
+        size: numPlayers,
+        wbRounds: wbRoundsCount,
+        lbRounds: lbRoundsCount
+      };
+
+      // 1. WINNERS BRACKET MATCHES
+      let currentRoundMatches = numPlayers / 2;
+      for (let r = 1; r <= wbRoundsCount; r++) {
+        for (let m = 1; m <= currentRoundMatches; m++) {
+          const id = `WB_R${r}_M${m}`;
+          matches[id] = {
+            id,
+            bracket: "WB",
+            round: r,
+            matchNum: m,
+            name: `WB Round ${r} - M${m}`,
+            p1: null,
+            p2: null,
+            score1: 0,
+            score2: 0,
+            winner: null,
+            loser: null,
+            isCompleted: false,
+            // Links
+            nextWinMatchId: r < wbRoundsCount ? `WB_R${r + 1}_M${Math.ceil(m / 2)}` : "GF_M1",
+            nextWinSlot: r < wbRoundsCount ? ((m % 2 === 1) ? 1 : 2) : 1,
+            nextLoseMatchId: null, // calculated below
+            nextLoseSlot: null
+          };
+        }
+        currentRoundMatches /= 2;
+      }
+
+      // 2. LOSERS BRACKET MATCHES
+      // In double elim, LB has twice the rounds of WB (minus 1).
+      // Odd LB rounds: losers from WB drop down and play against previous LB winners.
+      // Even LB rounds: LB winners play against each other.
+      let lbMatchCount = numPlayers / 4;
+      for (let r = 1; r <= lbRoundsCount; r++) {
+        for (let m = 1; m <= lbMatchCount; m++) {
+          const id = `LB_R${r}_M${m}`;
+          const isOdd = (r % 2 === 1);
+          let nextMatchId = null;
+          let nextSlot = null;
+
+          if (r === lbRoundsCount) {
+            nextMatchId = "GF_M1";
+            nextSlot = 2; // Losers champion enters GF as slot 2
+          } else if (isOdd) {
+            // winner advances to even round in same index
+            nextMatchId = `LB_R${r + 1}_M${m}`;
+            nextSlot = 1;
+          } else {
+            // winner advances to odd round, halving count
+            nextMatchId = `LB_R${r + 1}_M${Math.ceil(m / 2)}`;
+            nextSlot = (m % 2 === 1) ? 2 : 1;
+          }
+
+          matches[id] = {
+            id,
+            bracket: "LB",
+            round: r,
+            matchNum: m,
+            name: `LB Round ${r} - M${m}`,
+            p1: null,
+            p2: null,
+            score1: 0,
+            score2: 0,
+            winner: null,
+            loser: null,
+            isCompleted: false,
+            nextWinMatchId: nextMatchId,
+            nextWinSlot: nextSlot,
+            nextLoseMatchId: null, // eliminated from tourney
+            nextLoseSlot: null
+          };
+        }
+        if (r % 2 === 0) {
+          lbMatchCount /= 2;
+        }
+      }
+
+      // Connect WB losers drops into LB
+      // WB R1 losers -> LB R1
+      const wbR1Count = numPlayers / 2;
+      for (let m = 1; m <= wbR1Count; m++) {
+        const wbMatch = matches[`WB_R1_M${m}`];
+        const lbMatchId = `LB_R1_M${Math.ceil(m / 2)}`;
+        wbMatch.nextLoseMatchId = lbMatchId;
+        wbMatch.nextLoseSlot = (m % 2 === 1) ? 1 : 2;
+      }
+
+      // WB R2+ losers drop into odd LB rounds
+      for (let r = 2; r <= wbRoundsCount; r++) {
+        const count = numPlayers / Math.pow(2, r);
+        const targetLbRound = (r - 1) * 2; // Drops into LB round (2*(r-1))
+        for (let m = 1; m <= count; m++) {
+          const wbMatch = matches[`WB_R${r}_M${m}`];
+          if (targetLbRound <= lbRoundsCount) {
+            wbMatch.nextLoseMatchId = `LB_R${targetLbRound}_M${m}`;
+            wbMatch.nextLoseSlot = 2; // Drops into slot 2 of that match
+          }
+        }
+      }
+
+      // 3. GRAND FINALS MATCHES
+      matches["GF_M1"] = {
+        id: "GF_M1",
+        bracket: "GF",
+        round: 1,
+        matchNum: 1,
+        name: "Grand Finals",
+        p1: null, // Winners Champ
+        p2: null, // Losers Champ
+        score1: 0,
+        score2: 0,
+        winner: null,
+        loser: null,
+        isCompleted: false,
+        nextWinMatchId: null, // tournament champion!
+        nextWinSlot: null,
+        nextLoseMatchId: null
+      };
+
+      matches["GF_RESET"] = {
+        id: "GF_RESET",
+        bracket: "GF",
+        round: 2,
+        matchNum: 2,
+        name: "Grand Finals Reset",
+        p1: null,
+        p2: null,
+        score1: 0,
+        score2: 0,
+        winner: null,
+        loser: null,
+        isCompleted: false,
+        active: false // Only used if LB champ wins GF_M1
+      };
+
+      appState.matches = matches;
+    }
+
+    /**
+     * Seeds participants into WB Round 1
+     */
+    function seedWinnersRound1(players) {
+      const order = getStandardSeedOrder(players.length);
+      const r1Count = players.length / 2;
+
+      for (let m = 1; m <= r1Count; m++) {
+        const p1Seed = order[(m - 1) * 2];
+        const p2Seed = order[(m - 1) * 2 + 1];
+
+        const match = appState.matches[`WB_R1_M${m}`];
+        match.p1 = players[p1Seed - 1] || "BYE";
+        match.p2 = players[p2Seed - 1] || "BYE";
+      }
+    }
+
+    /**
+     * Resolves BYE matches automatically
+     */
+    function autoAdvanceByes() {
+      let changed = false;
+      Object.values(appState.matches).forEach(m => {
+        if (!m.isCompleted && m.p1 && m.p2) {
+          if (m.p1 === "BYE" && m.p2 === "BYE") {
+            setMatchResult(m.id, "BYE", "BYE", 0, 0);
+            changed = true;
+          } else if (m.p1 === "BYE") {
+            setMatchResult(m.id, m.p2, "BYE", 0, 1);
+            changed = true;
+          } else if (m.p2 === "BYE") {
+            setMatchResult(m.id, m.p1, "BYE", 1, 0);
+            changed = true;
+          }
+        }
+      });
+      if (changed) {
+        // recursively check cascade
+        autoAdvanceByes();
+      }
+    }
+
+    // --- MATCH OUTCOME LOGIC ---
+    function setMatchResult(matchId, winnerName, loserName, s1 = 0, s2 = 0) {
+      const match = appState.matches[matchId];
+      if (!match) return;
+
+      match.winner = winnerName;
+      match.loser = loserName;
+      match.score1 = s1;
+      match.score2 = s2;
+      match.isCompleted = true;
+
+      // Handle Grand Finals special rules
+      if (match.id === "GF_M1") {
+        const gfReset = appState.matches["GF_RESET"];
+        if (winnerName === match.p1) {
+          // Winners bracket champion won directly -> Tournament Over!
+          gfReset.active = false;
+          gfReset.isCompleted = true;
+          gfReset.p1 = "-";
+          gfReset.p2 = "-";
+          gfReset.winner = "-";
+        } else {
+          // Losers bracket champion won -> Force Grand Finals Reset!
+          gfReset.active = true;
+          gfReset.isCompleted = false;
+          gfReset.p1 = match.p1;
+          gfReset.p2 = match.p2;
+          gfReset.winner = null;
+          gfReset.score1 = 0;
+          gfReset.score2 = 0;
+        }
+      } else {
+        // Propagate winner
+        if (match.nextWinMatchId && appState.matches[match.nextWinMatchId]) {
+          const nextMatch = appState.matches[match.nextWinMatchId];
+          if (match.nextWinSlot === 1) nextMatch.p1 = winnerName;
+          if (match.nextWinSlot === 2) nextMatch.p2 = winnerName;
+        }
+
+        // Propagate loser (if WB match dropping to LB)
+        if (match.nextLoseMatchId && appState.matches[match.nextLoseMatchId]) {
+          const nextLoseMatch = appState.matches[match.nextLoseMatchId];
+          if (match.nextLoseSlot === 1) nextLoseMatch.p1 = loserName;
+          if (match.nextLoseSlot === 2) nextLoseMatch.p2 = loserName;
+        }
+      }
+
+      autoAdvanceByes();
+      saveToStorage();
+    }
+
+    function clearMatchResult(matchId) {
+      const match = appState.matches[matchId];
+      if (!match || !match.isCompleted) return;
+
+      const oldWinner = match.winner;
+      const oldLoser = match.loser;
+
+      match.winner = null;
+      match.loser = null;
+      match.score1 = 0;
+      match.score2 = 0;
+      match.isCompleted = false;
+
+      // Clear propagated entries down the line
+      if (match.nextWinMatchId && appState.matches[match.nextWinMatchId]) {
+        const next = appState.matches[match.nextWinMatchId];
+        if (next.p1 === oldWinner) next.p1 = null;
+        if (next.p2 === oldWinner) next.p2 = null;
+        clearMatchResult(next.id);
+      }
+      if (match.nextLoseMatchId && appState.matches[match.nextLoseMatchId]) {
+        const nextL = appState.matches[match.nextLoseMatchId];
+        if (nextL.p1 === oldLoser) nextL.p1 = null;
+        if (nextL.p2 === oldLoser) nextL.p2 = null;
+        clearMatchResult(nextL.id);
+      }
+
+      if (match.id === "GF_M1") {
+        const gfReset = appState.matches["GF_RESET"];
+        gfReset.active = false;
+        gfReset.isCompleted = false;
+        gfReset.p1 = null;
+        gfReset.p2 = null;
+        gfReset.winner = null;
+      }
+
+      saveToStorage();
+      render();
+    }
+
+    // --- MODAL & USER ACTIONS ---
+    function openMatchModal(matchId) {
+      const match = appState.matches[matchId];
+      if (!match) return;
+      if (!match.p1 || !match.p2 || match.p1 === "BYE" || match.p2 === "BYE") {
+        if (!match.isCompleted) {
+          showToast("対戦相手がまだ確定していません", true);
+          return;
+        }
+      }
+
+      activeModalMatchId = matchId;
+      document.getElementById("modalMatchBadge").textContent = match.id;
+      document.getElementById("modalMatchTitle").textContent = match.name;
+
+      document.getElementById("modalP1Name").textContent = match.p1 || "未定";
+      document.getElementById("modalP2Name").textContent = match.p2 || "未定";
+
+      document.getElementById("modalP1Score").value = match.score1 || 0;
+      document.getElementById("modalP2Score").value = match.score2 || 0;
+
+      // Highlight winner if completed
+      document.getElementById("p1Box").classList.remove("border-indigo-500", "bg-indigo-950/40");
+      document.getElementById("p2Box").classList.remove("border-indigo-500", "bg-indigo-950/40");
+
+      if (match.winner === match.p1) {
+        document.getElementById("p1Box").classList.add("border-indigo-500", "bg-indigo-950/40");
+      } else if (match.winner === match.p2) {
+        document.getElementById("p2Box").classList.add("border-indigo-500", "bg-indigo-950/40");
+      }
+
+      document.getElementById("matchModal").classList.remove("hidden");
+    }
+
+    function closeMatchModal() {
+      document.getElementById("matchModal").classList.add("hidden");
+      activeModalMatchId = null;
+    }
+
+    function selectWinnerDirect(slot) {
+      if (!activeModalMatchId) return;
+      const match = appState.matches[activeModalMatchId];
+      const p1Score = parseInt(document.getElementById("modalP1Score").value) || 0;
+      const p2Score = parseInt(document.getElementById("modalP2Score").value) || 0;
+
+      if (slot === 1) {
+        setMatchResult(match.id, match.p1, match.p2, Math.max(p1Score, 1), p2Score);
+      } else {
+        setMatchResult(match.id, match.p2, match.p1, p1Score, Math.max(p2Score, 1));
+      }
+
+      closeMatchModal();
+      render();
+      showToast(`${match.name} の勝者を更新しました`);
+    }
+
+    function saveModalScores() {
+      if (!activeModalMatchId) return;
+      const match = appState.matches[activeModalMatchId];
+      const s1 = parseInt(document.getElementById("modalP1Score").value) || 0;
+      const s2 = parseInt(document.getElementById("modalP2Score").value) || 0;
+
+      if (s1 === s2) {
+        showToast("同点は不可です。勝敗を決めるスコアを入力してください", true);
+        return;
+      }
+
+      if (s1 > s2) {
+        setMatchResult(match.id, match.p1, match.p2, s1, s2);
+      } else {
+        setMatchResult(match.id, match.p2, match.p1, s1, s2);
+      }
+
+      closeMatchModal();
+      render();
+      showToast("スコアと勝敗を保存しました");
+    }
+
+    function resetMatchState() {
+      if (!activeModalMatchId) return;
+      clearMatchResult(activeModalMatchId);
+      closeMatchModal();
+      showToast("試合ステータスをリセットしました");
+    }
+
+    // --- BRACKET RENDERING ---
+    function render() {
+      document.getElementById("headerSubText").textContent = appState.name || "トーナメント未開始";
+
+      if (!appState.isStarted || !appState.bracketStructure) {
+        document.getElementById("winnersBracketContainer").innerHTML = `<div class="text-slate-500 text-sm py-8">トーナメント未作成です。「大会設定」から作成してください。</div>`;
+        document.getElementById("losersBracketContainer").innerHTML = "";
+        document.getElementById("grandFinalsContainer").innerHTML = "";
+        return;
+      }
+
+      renderWinnersBracket();
+      renderLosersBracket();
+      renderGrandFinals();
+      updateProgressBar();
+    }
+
+    function renderWinnersBracket() {
+      const container = document.getElementById("winnersBracketContainer");
+      container.innerHTML = "";
+      const { wbRounds } = appState.bracketStructure;
+
+      for (let r = 1; r <= wbRounds; r++) {
+        const roundCol = document.createElement("div");
+        roundCol.className = "flex flex-col gap-4 w-60 sm:w-64 flex-shrink-0";
+        
+        const title = r === wbRounds ? "Winners Finals" : (r === wbRounds - 1 ? "Winners Semis" : `Round ${r}`);
+        roundCol.innerHTML = `
+          <div class="text-xs font-bold text-slate-400 uppercase tracking-wider px-2 py-1 bg-slate-900 border border-slate-800 rounded-lg flex items-center justify-between">
+            <span>${title}</span>
+            <span class="text-[10px] text-slate-500">WB-R${r}</span>
+          </div>
+          <div class="flex flex-col gap-6 justify-around flex-1" id="wb-round-${r}"></div>
+        `;
+        container.appendChild(roundCol);
+
+        const matchCol = roundCol.querySelector(`#wb-round-${r}`);
+        const roundMatches = Object.values(appState.matches).filter(m => m.bracket === "WB" && m.round === r);
+        roundMatches.sort((a,b) => a.matchNum - b.matchNum);
+
+        roundMatches.forEach(match => {
+          matchCol.appendChild(createMatchCard(match));
+        });
+      }
+    }
+
+    function renderLosersBracket() {
+      const container = document.getElementById("losersBracketContainer");
+      container.innerHTML = "";
+      const { lbRounds } = appState.bracketStructure;
+
+      for (let r = 1; r <= lbRounds; r++) {
+        const roundCol = document.createElement("div");
+        roundCol.className = "flex flex-col gap-4 w-60 sm:w-64 flex-shrink-0";
+        
+        const title = r === lbRounds ? "Losers Finals" : `Round ${r}`;
+        roundCol.innerHTML = `
+          <div class="text-xs font-bold text-rose-300 uppercase tracking-wider px-2 py-1 bg-slate-900 border border-slate-800 rounded-lg flex items-center justify-between">
+            <span>${title}</span>
+            <span class="text-[10px] text-rose-500/70">LB-R${r}</span>
+          </div>
+          <div class="flex flex-col gap-4 justify-around flex-1" id="lb-round-${r}"></div>
+        `;
+        container.appendChild(roundCol);
+
+        const matchCol = roundCol.querySelector(`#lb-round-${r}`);
+        const roundMatches = Object.values(appState.matches).filter(m => m.bracket === "LB" && m.round === r);
+        roundMatches.sort((a,b) => a.matchNum - b.matchNum);
+
+        roundMatches.forEach(match => {
+          matchCol.appendChild(createMatchCard(match));
+        });
+      }
+    }
+
+    function renderGrandFinals() {
+      const container = document.getElementById("grandFinalsContainer");
+      container.innerHTML = "";
+
+      const gf1 = appState.matches["GF_M1"];
+      const gfReset = appState.matches["GF_RESET"];
+
+      const col1 = document.createElement("div");
+      col1.className = "flex flex-col gap-4 w-64 flex-shrink-0";
+      col1.innerHTML = `
+        <div class="text-xs font-bold text-amber-300 uppercase tracking-wider px-2 py-1 bg-slate-900 border border-slate-800 rounded-lg flex items-center justify-between">
+          <span>Grand Finals</span>
+          <span class="text-[10px] text-amber-500/70">GF-1</span>
+        </div>
+      `;
+      col1.appendChild(createMatchCard(gf1));
+      container.appendChild(col1);
+
+      // Only show reset if needed or active
+      if (gfReset && (gfReset.active || (gf1 && gf1.isCompleted && gf1.winner === gf1.p2))) {
+        const col2 = document.createElement("div");
+        col2.className = "flex flex-col gap-4 w-64 flex-shrink-0";
+        col2.innerHTML = `
+          <div class="text-xs font-bold text-rose-400 uppercase tracking-wider px-2 py-1 bg-slate-900 border border-slate-800 rounded-lg flex items-center justify-between">
+            <span>GF Reset (延長戦)</span>
+            <span class="text-[10px] text-rose-500/70">GF-Reset</span>
+          </div>
+        `;
+        col2.appendChild(createMatchCard(gfReset));
+        container.appendChild(col2);
+      }
+    }
+
+    function createMatchCard(match) {
+      const card = document.createElement("div");
+      
+      const isReady = match.p1 && match.p2 && match.p1 !== "BYE" && match.p2 !== "BYE";
+      const isCompleted = match.isCompleted;
+
+      let borderClass = "border-slate-800";
+      let statusBadge = `<span class="w-2 h-2 rounded-full bg-slate-700"></span>`;
+
+      if (isCompleted) {
+        borderClass = "border-emerald-500/40";
+        statusBadge = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span>`;
+      } else if (isReady) {
+        borderClass = "border-amber-500/40";
+        statusBadge = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>`;
+      }
+
+      card.className = `bg-slate-900 border ${borderClass} rounded-xl p-2.5 shadow-md hover:shadow-indigo-500/10 cursor-pointer transition flex flex-col gap-1.5 select-none text-xs`;
+      card.onclick = () => openMatchModal(match.id);
+
+      // Player row builder
+      const p1Win = isCompleted && match.winner === match.p1;
+      const p2Win = isCompleted && match.winner === match.p2;
+
+      card.innerHTML = `
+        <div class="flex items-center justify-between pb-1 text-[10px] text-slate-400 border-b border-slate-800/80">
+          <span class="font-mono font-medium">${match.id}</span>
+          ${statusBadge}
+        </div>
+        
+        <!-- P1 Row -->
+        <div class="flex items-center justify-between px-2 py-1.5 rounded-lg ${p1Win ? 'bg-indigo-950/60 font-bold text-white border border-indigo-700/50' : 'bg-slate-950/70 text-slate-300'}">
+          <span class="truncate pr-2 ${!match.p1 ? 'italic text-slate-500' : ''}">${match.p1 || "待機中..."}</span>
+          <span class="font-mono font-bold ${p1Win ? 'text-indigo-400' : 'text-slate-400'}">${match.isCompleted ? match.score1 : '-'}</span>
+        </div>
+
+        <!-- P2 Row -->
+        <div class="flex items-center justify-between px-2 py-1.5 rounded-lg ${p2Win ? 'bg-indigo-950/60 font-bold text-white border border-indigo-700/50' : 'bg-slate-950/70 text-slate-300'}">
+          <span class="truncate pr-2 ${!match.p2 ? 'italic text-slate-500' : ''}">${match.p2 || "待機中..."}</span>
+          <span class="font-mono font-bold ${p2Win ? 'text-indigo-400' : 'text-slate-400'}">${match.isCompleted ? match.score2 : '-'}</span>
+        </div>
+      `;
+
+      return card;
+    }
+
+    function updateProgressBar() {
+      const matches = Object.values(appState.matches).filter(m => m.active !== false && m.p1 !== "BYE" && m.p2 !== "BYE");
+      if (matches.length === 0) return;
+
+      const completed = matches.filter(m => m.isCompleted).length;
+      const percent = Math.round((completed / matches.length) * 100);
+
+      document.getElementById("progressBar").style.width = `${percent}%`;
+      document.getElementById("progressPercent").textContent = `${percent}%`;
+    }
+
+    // --- STANDINGS CALCULATION ---
+    function renderStandings() {
+      const tbody = document.getElementById("standingsTableBody");
+      tbody.innerHTML = "";
+
+      const participants = appState.participants.filter(p => p !== "BYE");
+      if (participants.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-slate-500">参加者がいません</td></tr>`;
+        return;
+      }
+
+      // Check Grand Finals Champion
+      const gfReset = appState.matches["GF_RESET"];
+      const gf1 = appState.matches["GF_M1"];
+      let champion = null;
+      let runnerUp = null;
+
+      if (gfReset && gfReset.active && gfReset.isCompleted) {
+        champion = gfReset.winner;
+        runnerUp = gfReset.loser;
+      } else if (gf1 && gf1.isCompleted && gf1.winner === gf1.p1) {
+        champion = gf1.winner;
+        runnerUp = gf1.loser;
+      }
+
+      // 3rd place is loser of Losers Finals
+      const lbFinalRound = appState.bracketStructure ? appState.bracketStructure.lbRounds : 0;
+      const lbFinalMatch = Object.values(appState.matches).find(m => m.bracket === "LB" && m.round === lbFinalRound);
+      let thirdPlace = (lbFinalMatch && lbFinalMatch.isCompleted) ? lbFinalMatch.loser : null;
+
+      // Build ranking table
+      const rows = [];
+
+      participants.forEach(player => {
+        let rank = "-";
+        let status = "進行中";
+        let eliminatedIn = "-";
+
+        if (player === champion) {
+          rank = "1 優勝";
+          status = "チャンピオン";
+          eliminatedIn = "完全勝利";
+        } else if (player === runnerUp) {
+          rank = "2 準優勝";
+          status = "準優勝";
+          eliminatedIn = "Grand Finals";
+        } else if (player === thirdPlace) {
+          rank = "3 第3位";
+          status = "敗退";
+          eliminatedIn = "Losers Finals";
+        } else {
+          // Find the last LB match they lost
+          const lostMatch = Object.values(appState.matches).find(m => m.bracket === "LB" && m.loser === player);
+          if (lostMatch) {
+            status = "敗退";
+            eliminatedIn = `Losers R${lostMatch.round}`;
+            rank = `TOP ${Math.pow(2, Math.ceil(lostMatch.round / 2) + 1)}`;
+          } else {
+            // Still in tournament or active
+            status = "生存中";
+            rank = "対戦中";
+          }
+        }
+
+        rows.push({ player, rank, status, eliminatedIn });
+      });
+
+      // Sort rows: 1st, 2nd, 3rd first
+      rows.sort((a,b) => {
+        const orderA = a.rank.startsWith("1") ? 1 : a.rank.startsWith("2") ? 2 : a.rank.startsWith("3") ? 3 : 99;
+        const orderB = b.rank.startsWith("1") ? 1 : b.rank.startsWith("2") ? 2 : b.rank.startsWith("3") ? 3 : 99;
+        return orderA - orderB;
+      });
+
+      rows.forEach(r => {
+        const tr = document.createElement("tr");
+        tr.className = "hover:bg-slate-900/50 transition";
+        
+        let badgeColor = "bg-slate-800 text-slate-300";
+        if (r.rank.startsWith("1")) badgeColor = "bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40";
+        if (r.rank.startsWith("2")) badgeColor = "bg-slate-400/20 text-slate-200 font-bold border border-slate-400/40";
+        if (r.rank.startsWith("3")) badgeColor = "bg-amber-700/20 text-amber-600 font-bold border border-amber-700/40";
+
+        tr.innerHTML = `
+          <td class="py-3 px-4 text-center font-bold">
+            <span class="inline-block px-2.5 py-0.5 rounded-md text-xs ${badgeColor}">${r.rank}</span>
+          </td>
+          <td class="py-3 px-4 font-semibold text-slate-100">${r.player}</td>
+          <td class="py-3 px-4 text-center">
+            <span class="text-xs px-2 py-0.5 rounded-full ${r.status === '生存中' || r.status === 'チャンピオン' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'}">${r.status}</span>
+          </td>
+          <td class="py-3 px-4 text-right text-xs text-slate-400 font-mono">${r.eliminatedIn}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function printStandings() {
+      window.print();
+    }
+
+    // --- DATA PERSISTENCE & IMPORT / EXPORT ---
+    function saveToStorage() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+      } catch (e) {
+        console.error("Failed to save to localStorage", e);
+      }
+    }
+
+    function loadFromStorage() {
+      try {
+        const data = localStorage.getItem(STORAGE_KEY);
+        if (data) {
+          appState = JSON.parse(data);
+          document.getElementById("tournamentName").value = appState.name || "";
+          document.getElementById("playerInput").value = (appState.participants || []).filter(p => p !== "BYE").join("\n");
+        } else {
+          // Load default 4
+          loadPreset(4);
+        }
+      } catch (e) {
+        console.error("Failed to parse stored tournament data", e);
+      }
+    }
+
+    function exportData() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appState, null, 2));
+      const downloadAnchor = document.createElement("a");
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `tournament_${Date.now()}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      showToast("トーナメントJSONファイルをダウンロードしました");
+    }
+
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (parsed.matches && parsed.participants) {
+            appState = parsed;
+            saveToStorage();
+            document.getElementById("tournamentName").value = appState.name || "";
+            document.getElementById("playerInput").value = (appState.participants || []).filter(p => p !== "BYE").join("\n");
+            render();
+            switchView("bracket");
+            showToast("トーナメントデータをインポートしました");
+          } else {
+            showToast("無効なJSONファイル形式です", true);
+          }
+        } catch (err) {
+          showToast("ファイルの解析に失敗しました", true);
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = "";
+    }
+
+    function shareState() {
+      try {
+        const json = JSON.stringify(appState);
+        const b64 = btoa(unescape(encodeURIComponent(json)));
+        
+        // Copy to clipboard
+        const temp = document.createElement("input");
+        document.body.appendChild(temp);
+        temp.value = b64;
+        temp.select();
+        document.execCommand("copy");
+        document.body.removeChild(temp);
+
+        showToast("大会状態コードをクリップボードにコピーしました！");
+      } catch (e) {
+        showToast("共有コード生成に失敗しました", true);
+      }
+    }
+
+    function resetTournamentConfirm() {
+      if (confirm("現在のトーナメント進行状況をすべて消去して新規作成しますか？")) {
+        localStorage.removeItem(STORAGE_KEY);
+        appState = {
+          name: "Championship 2026",
+          participants: [],
+          matches: {},
+          bracketStructure: null,
+          isStarted: false
+        };
+        loadPreset(4);
+        render();
+        switchView("setup");
+        showToast("リセットしました");
+      }
+    }
+
+    // --- TOAST HELPER ---
+    function showToast(message, isError = false) {
+      const toast = document.getElementById("toast");
+      const msg = document.getElementById("toastMsg");
+      const icon = document.getElementById("toastIcon");
+
+      msg.textContent = message;
+      if (isError) {
+        icon.className = "ph ph-warning-circle text-xl text-rose-400";
+      } else {
+        icon.className = "ph ph-check-circle text-xl text-indigo-400";
+      }
+
+      toast.classList.remove("translate-y-20", "opacity-0");
+      setTimeout(() => {
+        toast.classList.add("translate-y-20", "opacity-0");
+      }, 3000);
+    }
+  </script>
+</body>
+</html>
